@@ -34,8 +34,8 @@ final class FocusTimerStore: ObservableObject {
     }
 
     func toggle(_ mode: FocusTimerMode) {
-        if activeMode == mode {
-            isRunning ? pause() : resume(mode)
+        if activeMode == mode, isRunning {
+            pause()
             return
         }
 
@@ -74,10 +74,8 @@ final class FocusTimerStore: ObservableObject {
 
     private func pause() {
         finishActiveSegment()
-    }
-
-    private func resume(_ mode: FocusTimerMode) {
-        startSegment(mode)
+        activeMode = nil
+        sessionSeconds = 0
     }
 
     private func startSegment(_ mode: FocusTimerMode) {
