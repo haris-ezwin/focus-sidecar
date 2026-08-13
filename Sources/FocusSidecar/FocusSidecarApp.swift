@@ -10,6 +10,7 @@ final class FocusSidecarApp: NSObject, NSApplicationDelegate {
     private var follower: WindowFollower?
     private var store: TaskStore?
     private var timerStore: FocusTimerStore?
+    private var menuBarTimerController: MenuBarTimerController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if activateExistingInstanceIfNeeded() {
@@ -79,6 +80,10 @@ final class FocusSidecarApp: NSObject, NSApplicationDelegate {
         self.follower = follower
         self.store = store
         self.timerStore = timerStore
+        self.menuBarTimerController = MenuBarTimerController(store: timerStore) { [weak follower] in
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
+            follower?.showPanel()
+        }
 
         Task { await store.restoreAndLoad() }
     }
