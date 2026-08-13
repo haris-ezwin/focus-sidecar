@@ -4,6 +4,7 @@ import SwiftUI
 struct TaskPanelView: View {
     @ObservedObject var store: TaskStore
     @ObservedObject var follower: WindowFollower
+    @ObservedObject var timerStore: FocusTimerStore
     @State private var eventEditor: EventEditorContext?
     @State private var eventToDelete: CountdownEvent?
     @State private var dividerDragStartHeight: CGFloat?
@@ -36,7 +37,7 @@ struct TaskPanelView: View {
                 }
                 .coordinateSpace(name: "focusPanelContent")
 
-                FocusTimerPanel()
+                FocusTimerPanel(store: timerStore)
             }
         }
         .frame(minWidth: 284, minHeight: 620)
@@ -305,11 +306,7 @@ struct TaskPanelView: View {
     }
 }
 
-private enum FocusTimerMode: String {
-    case work
-    case rest
-
-    var title: String { rawValue.capitalized }
+private extension FocusTimerMode {
     var color: Color {
         switch self {
         case .work: .blue
@@ -319,40 +316,31 @@ private enum FocusTimerMode: String {
 }
 
 private struct FocusTimerPanel: View {
-    @AppStorage("focusTimer.totalDate") private var storedDate = ""
-    @AppStorage("focusTimer.totalWorkSeconds") private var totalWorkSeconds = 0
-    @AppStorage("focusTimer.totalRestSeconds") private var totalRestSeconds = 0
-
-    @State private var activeMode: FocusTimerMode?
-    @State private var isRunning = false
-    @State private var sessionSeconds = 0
+    @ObservedObject var store: FocusTimerStore
 
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 8) {
-            timerCard(for: .work, totalSeconds: totalWorkSeconds)
-            timerCard(for: .rest, totalSeconds: totalRestSeconds)
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 10)
-        .padding(.bottom, 12)
-        .background(.black.opacity(0.16))
-        .overlay(alignment: .top) { Divider() }
-        .onAppear { resetDailyTotalsIfNeeded() }
-        .onReceive(ticker) { _ in
-            resetDailyTotalsIfNeeded()
-            guard isRunning, let activeMode else { return }
-            sessionSeconds += 1
-            switch activeMode {
-            case .work: totalWorkSeconds += 1
-            case .rest: totalRestSeconds += 1
+            timerCard(for: .work, totalSeconds: store.totalWorkSeconds)
+            timerCard(for: .rest, totalSeconds: store.totalRestSeconds)
+
+            if let error = store.errorMessage {
+                Text(error)
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .onReceive(ticker) { _ in store.tick() }
     }
 
     private func timerCard(for mode: FocusTimerMode, totalSeconds: Int) -> some View {
-        let isActive = activeMode == mode
+        let isActive = store.activeMode == mode
 
         return VStack(spacing: 0) {
             HStack {
@@ -363,63 +351,50 @@ private struct FocusTimerPanel: View {
             }
             .font(.system(size: 11, weight: .semibold, design: .rounded))
             .foregroundStyle(isActive ? mode.color : .secondary)
-            .padding(.horizontal, 10)
-            .frame(height: 25)
-            .background(.white.opacity(0.035))
+            .padding(.horizontal, 12)
+            .frame(height: 24)
 
-            Divider()
+            Rectangle()
+                .fill(.white.opacity(0.08))
+                .frame(height: 1)
 
             Button {
-                toggle(mode)
+                store.toggle(mode)
             } label: {
                 HStack(spacing: 10) {
                     Text(mode.title)
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .font(.system(size: 20, weight: .semibold, design: .rounded))
 
                     Spacer()
 
                     if isActive {
-                        Text(timerLabel(sessionSeconds))
-                            .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                        Text(timerLabel(store.sessionSeconds))
+                            .font(.system(size: 20, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
                             .contentTransition(.numericText())
                     }
 
-                    Image(systemName: isActive && isRunning ? "pause.fill" : "play.fill")
-                        .font(.system(size: 24, weight: .semibold))
+                    Image(systemName: isActive && store.isRunning ? "pause.fill" : "play.fill")
+                        .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(isActive ? mode.color : Color.secondary)
-                        .frame(width: 30)
+                        .frame(width: 26)
                 }
                 .foregroundStyle(isActive ? mode.color : Color.primary)
                 .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity, minHeight: 58)
+                .frame(maxWidth: .infinity, minHeight: 52)
             }
             .buttonStyle(.plain)
             .help(controlHelp(for: mode, isActive: isActive))
         }
-        .background(.white.opacity(isActive ? 0.07 : 0.035))
-        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .background(
+            isActive ? mode.color.opacity(0.075) : Color.white.opacity(0.045),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .stroke(isActive ? mode.color : Color.white.opacity(0.14), lineWidth: isActive ? 1.5 : 1)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(isActive ? mode.color.opacity(0.9) : Color.white.opacity(0.11), lineWidth: 1)
         }
-    }
-
-    private func toggle(_ mode: FocusTimerMode) {
-        if activeMode == mode {
-            isRunning.toggle()
-        } else {
-            activeMode = mode
-            sessionSeconds = 0
-            isRunning = true
-        }
-    }
-
-    private func resetDailyTotalsIfNeeded() {
-        let today = todayKey
-        guard storedDate != today else { return }
-        storedDate = today
-        totalWorkSeconds = 0
-        totalRestSeconds = 0
     }
 
     private func timerLabel(_ seconds: Int) -> String {
@@ -435,17 +410,13 @@ private struct FocusTimerPanel: View {
     private func totalLabel(_ seconds: Int) -> String {
         let hours = seconds / 3600
         let minutes = (seconds % 3600) / 60
-        return String(format: "%dh %02d mins", hours, minutes)
-    }
-
-    private var todayKey: String {
-        let components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
-        return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
+        let remainingSeconds = seconds % 60
+        return String(format: "%dh %02d mins %d sec", hours, minutes, remainingSeconds)
     }
 
     private func controlHelp(for mode: FocusTimerMode, isActive: Bool) -> String {
         guard isActive else { return "Start \(mode.title.lowercased()) timer" }
-        return isRunning ? "Pause \(mode.title.lowercased()) timer" : "Resume \(mode.title.lowercased()) timer"
+        return store.isRunning ? "Pause \(mode.title.lowercased()) timer" : "Resume \(mode.title.lowercased()) timer"
     }
 }
 

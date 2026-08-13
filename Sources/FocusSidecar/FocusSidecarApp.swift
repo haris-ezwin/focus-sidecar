@@ -9,6 +9,7 @@ final class FocusSidecarApp: NSObject, NSApplicationDelegate {
     private var panel: CompanionPanel?
     private var follower: WindowFollower?
     private var store: TaskStore?
+    private var timerStore: FocusTimerStore?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if activateExistingInstanceIfNeeded() {
@@ -39,8 +40,9 @@ final class FocusSidecarApp: NSObject, NSApplicationDelegate {
 
         let service = SupabaseService(configuration: configuration)
         let store = TaskStore(service: service)
+        let timerStore = FocusTimerStore()
         let follower = WindowFollower()
-        let contentView = TaskPanelView(store: store, follower: follower)
+        let contentView = TaskPanelView(store: store, follower: follower, timerStore: timerStore)
 
         let panel = CompanionPanel(
             contentRect: NSRect(x: 0, y: 0, width: 284, height: 620),
@@ -76,6 +78,7 @@ final class FocusSidecarApp: NSObject, NSApplicationDelegate {
         self.panel = panel
         self.follower = follower
         self.store = store
+        self.timerStore = timerStore
 
         Task { await store.restoreAndLoad() }
     }
@@ -93,6 +96,7 @@ final class FocusSidecarApp: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        timerStore?.stopForTermination()
         DistributedNotificationCenter.default().removeObserver(self)
     }
 

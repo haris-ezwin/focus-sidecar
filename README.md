@@ -23,11 +23,13 @@ A tiny native macOS companion that follows the focused window, shows tasks due t
 
 The app reads its Supabase URL and publishable client key from local environment configuration. It refuses `sb_secret_…` keys and never stores the user's password.
 
-Countdown events do not use Supabase. They are stored only on this Mac at:
+Countdown events and Work/Rest timer sessions do not use Supabase. They are stored only on this Mac at:
 
 ```text
 ~/Library/Application Support/Focus Sidecar/events.sqlite3
 ```
+
+Every timer session records its mode, start/end timestamps, and duration in the local `timer_sessions` SQLite table. Daily totals are calculated from those records.
 
 ## Configure Supabase
 
