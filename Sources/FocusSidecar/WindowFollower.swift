@@ -41,14 +41,22 @@ final class WindowFollower: ObservableObject {
             Task { @MainActor in self?.updatePosition() }
         }
         RunLoop.main.add(timer!, forMode: .common)
-        requestPermissionIfNeeded()
+        refreshAccessibilityPermission()
         updatePosition()
     }
 
     func requestPermissionIfNeeded() {
-        guard !AXIsProcessTrusted() else { return }
+        guard !AXIsProcessTrusted() else {
+            hasAccessibilityPermission = true
+            return
+        }
         let options = ["AXTrustedCheckOptionPrompt": true]
         _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
+        refreshAccessibilityPermission()
+    }
+
+    func refreshAccessibilityPermission() {
+        hasAccessibilityPermission = AXIsProcessTrusted()
     }
 
     func togglePinned() {

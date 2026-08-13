@@ -43,7 +43,7 @@ final class FocusSidecarApp: NSObject, NSApplicationDelegate {
         let contentView = TaskPanelView(store: store, follower: follower)
 
         let panel = CompanionPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 284, height: 430),
+            contentRect: NSRect(x: 0, y: 0, width: 284, height: 620),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -63,9 +63,9 @@ final class FocusSidecarApp: NSObject, NSApplicationDelegate {
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = false
         panel.standardWindowButton(.zoomButton)?.isHidden = false
         panel.contentViewController = NSHostingController(rootView: contentView)
-        panel.setContentSize(NSSize(width: 284, height: 430))
-        panel.contentMinSize = NSSize(width: 284, height: 430)
-        panel.contentMaxSize = NSSize(width: 420, height: 600)
+        panel.setContentSize(NSSize(width: 284, height: 620))
+        panel.contentMinSize = NSSize(width: 284, height: 620)
+        panel.contentMaxSize = NSSize(width: 420, height: 820)
         let restoredFrame = panel.setFrameUsingName("FocusSidecarWindowFrame")
         _ = panel.setFrameAutosaveName("FocusSidecarWindowFrame")
 

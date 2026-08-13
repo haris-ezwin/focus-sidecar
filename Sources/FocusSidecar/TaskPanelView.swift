@@ -17,25 +17,29 @@ struct TaskPanelView: View {
             Rectangle()
                 .fill(.ultraThinMaterial)
 
-            GeometryReader { geometry in
-                VStack(spacing: 10) {
-                    eventsSection(maxListHeight: maxEventsListHeight(in: geometry.size.height))
+            VStack(spacing: 0) {
+                GeometryReader { geometry in
+                    VStack(spacing: 10) {
+                        eventsSection(maxListHeight: maxEventsListHeight(in: geometry.size.height))
 
-                    draggableDivider(maxListHeight: maxEventsListHeight(in: geometry.size.height))
+                        draggableDivider(maxListHeight: maxEventsListHeight(in: geometry.size.height))
 
-                    Group {
-                        if store.isAuthenticated {
-                            tasksView
-                        } else {
-                            SignInView(store: store, follower: follower)
+                        Group {
+                            if store.isAuthenticated {
+                                tasksView
+                            } else {
+                                SignInView(store: store, follower: follower)
+                            }
                         }
                     }
+                    .padding(14)
                 }
-                .padding(14)
+                .coordinateSpace(name: "focusPanelContent")
+
+                FocusTimerPanel()
             }
-            .coordinateSpace(name: "focusPanelContent")
         }
-        .frame(minWidth: 284, minHeight: 430)
+        .frame(minWidth: 284, minHeight: 620)
         .preferredColorScheme(.dark)
         .sheet(item: $eventEditor) { context in
             EventEditorSheet(event: context.event) { name, date in
@@ -110,8 +114,6 @@ struct TaskPanelView: View {
                 }
                 .scrollIndicators(.never)
             }
-
-            footer
         }
     }
 
@@ -268,6 +270,8 @@ struct TaskPanelView: View {
             Menu {
                 Text(store.signedInEmail ?? "")
                 Divider()
+                windowFollowingSettings
+                Divider()
                 Button("Sign out") { Task { await store.signOut() } }
                 Button("Quit Focus Sidecar") { NSApp.terminate(nil) }
             } label: {
@@ -281,18 +285,167 @@ struct TaskPanelView: View {
     }
 
     @ViewBuilder
-    private var footer: some View {
-        if !follower.hasAccessibilityPermission {
+    private var windowFollowingSettings: some View {
+        Menu("Settings", systemImage: "gearshape") {
+            if follower.hasAccessibilityPermission {
+                Label("Window following enabled", systemImage: "checkmark.circle.fill")
+                    .disabled(true)
+            } else {
+                Button("Enable window following…", systemImage: "macwindow.on.rectangle") {
+                    follower.requestPermissionIfNeeded()
+                }
+            }
+
             Button {
-                follower.requestPermissionIfNeeded()
+                follower.refreshAccessibilityPermission()
             } label: {
-                Label("Enable window following", systemImage: "macwindow.on.rectangle")
-                    .font(.caption2)
+                Label("Check permission again", systemImage: "arrow.clockwise")
+            }
+        }
+    }
+}
+
+private enum FocusTimerMode: String {
+    case work
+    case rest
+
+    var title: String { rawValue.capitalized }
+    var color: Color {
+        switch self {
+        case .work: .blue
+        case .rest: .orange
+        }
+    }
+}
+
+private struct FocusTimerPanel: View {
+    @AppStorage("focusTimer.totalDate") private var storedDate = ""
+    @AppStorage("focusTimer.totalWorkSeconds") private var totalWorkSeconds = 0
+    @AppStorage("focusTimer.totalRestSeconds") private var totalRestSeconds = 0
+
+    @State private var activeMode: FocusTimerMode?
+    @State private var isRunning = false
+    @State private var sessionSeconds = 0
+
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        VStack(spacing: 8) {
+            timerCard(for: .work, totalSeconds: totalWorkSeconds)
+            timerCard(for: .rest, totalSeconds: totalRestSeconds)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+        .background(.black.opacity(0.16))
+        .overlay(alignment: .top) { Divider() }
+        .onAppear { resetDailyTotalsIfNeeded() }
+        .onReceive(ticker) { _ in
+            resetDailyTotalsIfNeeded()
+            guard isRunning, let activeMode else { return }
+            sessionSeconds += 1
+            switch activeMode {
+            case .work: totalWorkSeconds += 1
+            case .rest: totalRestSeconds += 1
+            }
+        }
+    }
+
+    private func timerCard(for mode: FocusTimerMode, totalSeconds: Int) -> some View {
+        let isActive = activeMode == mode
+
+        return VStack(spacing: 0) {
+            HStack {
+                Text("Total \(mode.title.lowercased()) today")
+                Spacer()
+                Text(totalLabel(totalSeconds))
+                    .monospacedDigit()
+            }
+            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .foregroundStyle(isActive ? mode.color : .secondary)
+            .padding(.horizontal, 10)
+            .frame(height: 25)
+            .background(.white.opacity(0.035))
+
+            Divider()
+
+            Button {
+                toggle(mode)
+            } label: {
+                HStack(spacing: 10) {
+                    Text(mode.title)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+
+                    Spacer()
+
+                    if isActive {
+                        Text(timerLabel(sessionSeconds))
+                            .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                            .contentTransition(.numericText())
+                    }
+
+                    Image(systemName: isActive && isRunning ? "pause.fill" : "play.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(isActive ? mode.color : Color.secondary)
+                        .frame(width: 30)
+                }
+                .foregroundStyle(isActive ? mode.color : Color.primary)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: 58)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.orange)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .help(controlHelp(for: mode, isActive: isActive))
         }
+        .background(.white.opacity(isActive ? 0.07 : 0.035))
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .stroke(isActive ? mode.color : Color.white.opacity(0.14), lineWidth: isActive ? 1.5 : 1)
+        }
+    }
+
+    private func toggle(_ mode: FocusTimerMode) {
+        if activeMode == mode {
+            isRunning.toggle()
+        } else {
+            activeMode = mode
+            sessionSeconds = 0
+            isRunning = true
+        }
+    }
+
+    private func resetDailyTotalsIfNeeded() {
+        let today = todayKey
+        guard storedDate != today else { return }
+        storedDate = today
+        totalWorkSeconds = 0
+        totalRestSeconds = 0
+    }
+
+    private func timerLabel(_ seconds: Int) -> String {
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        let seconds = seconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    private func totalLabel(_ seconds: Int) -> String {
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        return String(format: "%dh %02d mins", hours, minutes)
+    }
+
+    private var todayKey: String {
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
+    }
+
+    private func controlHelp(for mode: FocusTimerMode, isActive: Bool) -> String {
+        guard isActive else { return "Start \(mode.title.lowercased()) timer" }
+        return isRunning ? "Pause \(mode.title.lowercased()) timer" : "Resume \(mode.title.lowercased()) timer"
     }
 }
 
@@ -618,6 +771,31 @@ private struct SignInView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(follower.isPinned ? .green : .secondary)
                 .help(follower.isPinned ? "Unpin and move freely" : "Pin beside the active window")
+
+                Menu {
+                    Menu("Settings", systemImage: "gearshape") {
+                        if follower.hasAccessibilityPermission {
+                            Label("Window following enabled", systemImage: "checkmark.circle.fill")
+                                .disabled(true)
+                        } else {
+                            Button("Enable window following…", systemImage: "macwindow.on.rectangle") {
+                                follower.requestPermissionIfNeeded()
+                            }
+                        }
+
+                        Button("Check permission again", systemImage: "arrow.clockwise") {
+                            follower.refreshAccessibilityPermission()
+                        }
+                    }
+                    Divider()
+                    Button("Quit Focus Sidecar") { NSApp.terminate(nil) }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .foregroundStyle(.secondary)
             }
             Spacer()
             Image(systemName: "checklist")

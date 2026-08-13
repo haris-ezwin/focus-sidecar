@@ -4,8 +4,8 @@ A tiny native macOS companion that follows the focused window, shows tasks due t
 
 ## What it does
 
-- Opens as a compact 284 × 430 floating panel and caps manual resizing at 420 × 600.
-- Follows the focused macOS window, using Accessibility permission.
+- Opens as a compact 284 × 620 floating panel and caps manual resizing at 420 × 820.
+- Follows the focused macOS window when Accessibility permission is enabled from the app’s Settings menu.
 - Includes a pin toggle: pinning captures the panel's exact current position relative to the active window; unpinned stays where you drag its title bar on the current desktop.
 - Uses the standard macOS close, minimize, and zoom window controls.
 - Appears in the Dock and redirects duplicate launches to the existing app window.
@@ -14,6 +14,7 @@ A tiny native macOS companion that follows the focused window, shows tasks due t
 - Adds, edits, and deletes event names and dates/times locally in SQLite.
 - Shows the number of calendar days remaining before every event.
 - Uses a draggable divider to give more space to events or tasks and remembers the chosen split.
+- Keeps Work and Rest count-up timers fixed to the bottom, with play/pause controls and daily accumulated totals.
 - Loads rows where `type = 'Task'` and `due_date` is today.
 - Shows task title, time, and priority.
 - Clicking a task's completion circle updates its Supabase status to `Done`, briefly celebrates the check, then removes the row so the next task slides up.
