@@ -277,6 +277,7 @@ struct TaskPanelView: View {
             .help(follower.isPinned ? "Unpin and move freely" : "Pin beside the active window")
 
             Button {
+                timerStore.refreshDailyTotals()
                 Task { await store.refresh() }
             } label: {
                 Image(systemName: "arrow.clockwise")
@@ -284,7 +285,7 @@ struct TaskPanelView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .help("Refresh")
+            .help("Refresh tasks and time records")
 
             Menu {
                 Text(store.signedInEmail ?? "")

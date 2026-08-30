@@ -72,6 +72,17 @@ final class FocusTimerStore: ObservableObject {
         finishActiveSegment()
     }
 
+    func refreshDailyTotals() {
+        handleDateChangeIfNeeded()
+
+        do {
+            try reloadDailyTotals()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func pause() {
         finishActiveSegment()
         activeMode = nil
