@@ -620,7 +620,6 @@ private struct TaskRow: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             }
-
         }
         .padding(.vertical, 7)
         .padding(.horizontal, 8)
