@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct TaskPanelView: View {
     @ObservedObject var store: TaskStore
@@ -10,7 +11,7 @@ struct TaskPanelView: View {
     @State private var dividerDragStartHeight: CGFloat?
     @State private var liveEventsListHeight: CGFloat?
     @State private var isDividerHovered = false
-    @State private var revealedTaskID: UUID?
+    @State private var draggingTaskID: UUID?
     @AppStorage("countdown.eventsListHeight") private var preferredEventsListHeight = 188.0
 
     var body: some View {
@@ -95,23 +96,40 @@ struct TaskPanelView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 3) {
-                        ForEach(store.tasks) { task in
-                            SwipeableTaskRow(
+                        ForEach(Array(store.tasks.enumerated()), id: \.element.id) { index, task in
+                            TaskRow(
                                 task: task,
                                 isUpdating: store.updatingTaskIDs.contains(task.id),
-                                isDeleting: store.deletingTaskIDs.contains(task.id),
-                                revealedTaskID: $revealedTaskID,
-                                onToggle: { Task { await store.toggle(task) } },
-                                onDelete: {
-                                    Task {
-                                        await store.delete(task)
-                                        revealedTaskID = nil
-                                    }
-                                }
+                                onToggle: { Task { await store.toggle(task) } }
+                            )
+                            .opacity(draggingTaskID == task.id ? 0 : (index == 0 ? 1 : 0.05))
+                            .onDrag {
+                                draggingTaskID = task.id
+                                return NSItemProvider(object: task.id.uuidString as NSString)
+                            } preview: {
+                                TaskRow(
+                                    task: task,
+                                    isUpdating: false,
+                                    onToggle: {}
+                                )
+                                .frame(width: 278)
+                                .scaleEffect(1.045)
+                                .shadow(color: .black.opacity(0.34), radius: 9, y: 4)
+                            }
+                            .onDrop(
+                                of: [UTType.text],
+                                delegate: TaskReorderDropDelegate(
+                                    destinationTaskID: task.id,
+                                    draggingTaskID: $draggingTaskID,
+                                    onMove: store.moveTask
+                                )
                             )
                         }
                     }
-                    .animation(.snappy(duration: 0.34), value: store.tasks)
+                    .animation(
+                        draggingTaskID == nil ? .snappy(duration: 0.34) : nil,
+                        value: store.tasks
+                    )
                 }
                 .scrollIndicators(.never)
             }
@@ -303,6 +321,27 @@ struct TaskPanelView: View {
                 Label("Check permission again", systemImage: "arrow.clockwise")
             }
         }
+    }
+}
+
+private struct TaskReorderDropDelegate: DropDelegate {
+    let destinationTaskID: UUID
+    @Binding var draggingTaskID: UUID?
+    let onMove: (UUID, UUID) -> Void
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard let sourceTaskID = draggingTaskID else { return false }
+        var transaction = Transaction()
+        transaction.animation = nil
+        withTransaction(transaction) {
+            onMove(sourceTaskID, destinationTaskID)
+            draggingTaskID = nil
+        }
+        return true
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
     }
 }
 
@@ -542,115 +581,6 @@ private struct EventEditorSheet: View {
     }
 }
 
-private struct SwipeableTaskRow: View {
-    let task: FocusTask
-    let isUpdating: Bool
-    let isDeleting: Bool
-    @Binding var revealedTaskID: UUID?
-    let onToggle: () -> Void
-    let onDelete: () -> Void
-
-    @State private var dragStartOffset: CGFloat?
-    @State private var liveOffset: CGFloat?
-    @State private var isHorizontalDrag: Bool?
-
-    private let revealWidth: CGFloat = 58
-    private let actionWidth: CGFloat = 50
-
-    var body: some View {
-        ZStack(alignment: .trailing) {
-            Button(action: onDelete) {
-                Group {
-                    if isDeleting {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Image(systemName: "trash.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                }
-                .foregroundStyle(.white)
-                .frame(width: actionWidth)
-                .frame(maxHeight: .infinity)
-                .background(
-                    Color.red,
-                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(isDeleting)
-            .opacity(revealProgress)
-            .allowsHitTesting(revealProgress > 0.95 && !isDeleting)
-            .accessibilityLabel("Delete task")
-            .help("Delete task")
-            .zIndex(1)
-
-            TaskRow(
-                task: task,
-                isUpdating: isUpdating || isDeleting,
-                onToggle: onToggle
-            )
-            .offset(x: displayedOffset)
-            .contentShape(Rectangle())
-            .simultaneousGesture(swipeGesture)
-            .animation(.snappy(duration: 0.22), value: revealedTaskID)
-            .help("Drag left for task options")
-            .zIndex(0)
-        }
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .transition(.asymmetric(
-            insertion: .opacity.combined(with: .move(edge: .bottom)),
-            removal: .opacity.combined(with: .move(edge: .trailing))
-        ))
-    }
-
-    private var settledOffset: CGFloat {
-        revealedTaskID == task.id ? -revealWidth : 0
-    }
-
-    private var displayedOffset: CGFloat {
-        liveOffset ?? settledOffset
-    }
-
-    private var revealProgress: Double {
-        min(max(Double(-displayedOffset / revealWidth), 0), 1)
-    }
-
-    private var swipeGesture: some Gesture {
-        DragGesture(minimumDistance: 8, coordinateSpace: .global)
-            .onChanged { value in
-                if isHorizontalDrag == nil {
-                    isHorizontalDrag = abs(value.translation.width) > abs(value.translation.height)
-                }
-                guard isHorizontalDrag == true, !isDeleting else { return }
-
-                let startOffset: CGFloat
-                if let dragStartOffset {
-                    startOffset = dragStartOffset
-                } else {
-                    startOffset = settledOffset
-                    dragStartOffset = startOffset
-                }
-
-                liveOffset = min(max(startOffset + value.translation.width, -revealWidth), 0)
-            }
-            .onEnded { _ in
-                defer {
-                    liveOffset = nil
-                    dragStartOffset = nil
-                    isHorizontalDrag = nil
-                }
-                guard isHorizontalDrag == true, !isDeleting else { return }
-
-                let shouldReveal = (liveOffset ?? settledOffset) < -(revealWidth / 2)
-                withAnimation(.snappy(duration: 0.22)) {
-                    revealedTaskID = shouldReveal ? task.id : nil
-                }
-            }
-    }
-}
-
 private struct TaskRow: View {
     let task: FocusTask
     let isUpdating: Bool
@@ -690,6 +620,7 @@ private struct TaskRow: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             }
+
         }
         .padding(.vertical, 7)
         .padding(.horizontal, 8)

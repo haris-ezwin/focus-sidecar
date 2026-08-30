@@ -81,10 +81,26 @@ final class TaskStore: ObservableObject {
         defer { isLoading = false }
 
         do {
-            tasks = try await service.tasks(for: Date()).filter { !$0.isDone }
+            let date = Date()
+            let fetchedTasks = try await service.tasks(for: date).filter { !$0.isDone }
+            tasks = applyStoredOrder(to: fetchedTasks, for: date)
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func moveTask(_ draggedTaskID: UUID, over destinationTaskID: UUID) {
+        guard draggedTaskID != destinationTaskID,
+              let sourceIndex = tasks.firstIndex(where: { $0.id == draggedTaskID }),
+              let destinationIndex = tasks.firstIndex(where: { $0.id == destinationTaskID }) else {
+            return
+        }
+
+        tasks.move(
+            fromOffsets: IndexSet(integer: sourceIndex),
+            toOffset: destinationIndex > sourceIndex ? destinationIndex + 1 : destinationIndex
+        )
+        saveTaskOrder(for: Date())
     }
 
     func toggle(_ task: FocusTask) async {
@@ -101,6 +117,7 @@ final class TaskStore: ObservableObject {
             if completed {
                 try? await Task.sleep(for: .milliseconds(420))
                 tasks.removeAll { $0.id == task.id }
+                saveTaskOrder(for: Date())
             }
         } catch {
             replaceTask(task, status: task.status)
@@ -117,6 +134,7 @@ final class TaskStore: ObservableObject {
         do {
             try await service.deleteTask(taskID: task.id)
             tasks.removeAll { $0.id == task.id }
+            saveTaskOrder(for: Date())
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -178,6 +196,45 @@ final class TaskStore: ObservableObject {
             startTime: task.startTime,
             endTime: task.endTime
         )
+    }
+
+    private func applyStoredOrder(to fetchedTasks: [FocusTask], for date: Date) -> [FocusTask] {
+        let storedIDs = UserDefaults.standard.stringArray(forKey: taskOrderKey(for: date)) ?? []
+        guard !storedIDs.isEmpty else { return fetchedTasks }
+
+        let storedPositions = Dictionary(
+            uniqueKeysWithValues: storedIDs.enumerated().map { ($0.element, $0.offset) }
+        )
+        let serverPositions = Dictionary(
+            uniqueKeysWithValues: fetchedTasks.enumerated().map { ($0.element.id, $0.offset) }
+        )
+
+        return fetchedTasks.sorted { lhs, rhs in
+            let lhsPosition = storedPositions[lhs.id.uuidString]
+            let rhsPosition = storedPositions[rhs.id.uuidString]
+
+            switch (lhsPosition, rhsPosition) {
+            case let (.some(lhs), .some(rhs)):
+                return lhs < rhs
+            case (.some, .none):
+                return true
+            case (.none, .some):
+                return false
+            case (.none, .none):
+                return (serverPositions[lhs.id] ?? 0) < (serverPositions[rhs.id] ?? 0)
+            }
+        }
+    }
+
+    private func saveTaskOrder(for date: Date) {
+        UserDefaults.standard.set(
+            tasks.map { $0.id.uuidString },
+            forKey: taskOrderKey(for: date)
+        )
+    }
+
+    private func taskOrderKey(for date: Date) -> String {
+        "taskOrder.\(SupabaseService.dateString(for: date, calendar: .current))"
     }
 
     private func startAutoRefresh() {
