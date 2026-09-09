@@ -35,6 +35,7 @@ swift build -c release
 
 mkdir -p "$contents_dir/MacOS" "$contents_dir/Resources"
 cp "$project_dir/.build/release/FocusSidecar" "$contents_dir/MacOS/FocusSidecar"
+cp "$project_dir/Assets/CodexIcon.png" "$contents_dir/Resources/CodexIcon.png"
 
 if [[ -f "$icon_source" ]]; then
     icon_work_dir="$(mktemp -d "${TMPDIR:-/tmp}/focus-sidecar-icon.XXXXXX")"

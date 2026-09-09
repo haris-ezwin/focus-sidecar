@@ -15,6 +15,7 @@ A tiny native macOS companion that follows the focused window, shows tasks due t
 - Shows the number of calendar days remaining before every event.
 - Uses a draggable divider to give more space to events or tasks and remembers the chosen split.
 - Keeps Work and Rest count-up timers fixed to the bottom, with play/pause controls and daily accumulated totals.
+- Shows a compact Codex icon, usage bar, and daily-budget percentage above the timers. The default daily threshold is 100 ÷ 7 (14.3 percentage points) of the weekly allowance; reaching that threshold displays 100%. Click the row to set and save a different threshold, or view recent days and connection details.
 - Loads rows where `type = 'Task'` and `due_date` is today.
 - Shows task title, time, and priority.
 - Lets you click and hold a task card to drag it up or down; the local order survives refreshes for that day.
@@ -31,6 +32,8 @@ Countdown events and Work/Rest timer sessions do not use Supabase. They are stor
 ```
 
 Every timer session records its mode, start/end timestamps, and duration in the local `timer_sessions` SQLite table. Daily totals are calculated from those records.
+
+Codex usage requires the Codex CLI signed in with a ChatGPT account. Sidecar reads quota metadata through `codex app-server` every minute while running; it does not start model turns. It saves readings and up to seven observed days in `~/Library/Application Support/Focus Sidecar/codex-usage.json`. Days start at midnight Asia/Kuala_Lumpur. The first day, overnight tracking gaps, and quota resets are marked partial because earlier usage cannot be reconstructed. Counts are approximate to the quota readings and polling interval. The bar turns amber at 80% of the daily target and red at 100%; connection failures show a muted bar and details instead of claiming a fresh reading. This target is a personal budget, not a separate Codex limit.
 
 ## Configure Supabase
 
