@@ -6,6 +6,7 @@ struct TaskPanelView: View {
     @ObservedObject var store: TaskStore
     @ObservedObject var follower: WindowFollower
     @ObservedObject var timerStore: FocusTimerStore
+    @StateObject private var codexUsageStore = CodexUsageStore()
     @State private var eventEditor: EventEditorContext?
     @State private var eventToDelete: CountdownEvent?
     @State private var dividerDragStartHeight: CGFloat?
@@ -38,6 +39,7 @@ struct TaskPanelView: View {
                 }
                 .coordinateSpace(name: "focusPanelContent")
 
+                CodexUsageBar(store: codexUsageStore)
                 FocusTimerPanel(store: timerStore)
             }
         }
