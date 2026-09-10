@@ -39,6 +39,7 @@ struct TaskPanelView: View {
                 }
                 .coordinateSpace(name: "focusPanelContent")
 
+                SystemUsageBar()
                 CodexUsageBar(store: codexUsageStore)
                 FocusTimerPanel(store: timerStore)
             }
@@ -363,9 +364,12 @@ private struct FocusTimerPanel: View {
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(spacing: 8) {
-            timerCard(for: .work, totalSeconds: store.totalWorkSeconds)
-            timerCard(for: .rest, totalSeconds: store.totalRestSeconds)
+        VStack(spacing: 4) {
+            HStack(spacing: 6) {
+                timerCard(for: .work, totalSeconds: store.totalWorkSeconds)
+                timerCard(for: .rest, totalSeconds: store.totalRestSeconds)
+            }
+            .fixedSize(horizontal: false, vertical: true)
 
             if let error = store.errorMessage {
                 Text(error)
@@ -376,67 +380,54 @@ private struct FocusTimerPanel: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
         .onReceive(ticker) { _ in store.tick() }
     }
 
     private func timerCard(for mode: FocusTimerMode, totalSeconds: Int) -> some View {
         let isActive = store.activeMode == mode
 
-        return VStack(spacing: 0) {
-            HStack {
-                Text("Total \(mode.title.lowercased()) today")
-                Spacer()
-                Text(totalLabel(totalSeconds))
-                    .monospacedDigit()
-            }
-            .font(.system(size: 11, weight: .semibold, design: .rounded))
-            .foregroundStyle(isActive ? mode.color : .secondary)
-            .padding(.horizontal, 12)
-            .frame(height: 24)
-
-            Rectangle()
-                .fill(.white.opacity(0.08))
-                .frame(height: 1)
-
-            Button {
-                store.toggle(mode)
-            } label: {
-                HStack(spacing: 10) {
+        return Button {
+            store.toggle(mode)
+        } label: {
+            HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(mode.title)
-                        .font(.system(size: 20, weight: .semibold, design: .rounded))
-
-                    Spacer()
-
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(isActive ? mode.color : .secondary)
+                    Text(totalLabel(totalSeconds))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.primary)
                     if isActive {
-                        Text(timerLabel(store.sessionSeconds))
-                            .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        Text("Session \(timerLabel(store.sessionSeconds))")
+                            .font(.system(size: 9, weight: .medium, design: .rounded))
                             .monospacedDigit()
+                            .foregroundStyle(mode.color)
                             .contentTransition(.numericText())
                     }
-
-                    Image(systemName: isActive && store.isRunning ? "pause.fill" : "play.fill")
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(isActive ? mode.color : Color.secondary)
-                        .frame(width: 26)
                 }
-                .foregroundStyle(isActive ? mode.color : Color.primary)
-                .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity, minHeight: 52)
+                Spacer(minLength: 0)
+                Image(systemName: isActive && store.isRunning ? "pause.fill" : "play.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(isActive ? mode.color : .secondary)
             }
-            .buttonStyle(.plain)
-            .help(controlHelp(for: mode, isActive: isActive))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .background(
+                isActive ? mode.color.opacity(0.075) : Color.white.opacity(0.035),
+                in: RoundedRectangle(cornerRadius: 10)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10))
         }
-        .background(
-            isActive ? mode.color.opacity(0.075) : Color.white.opacity(0.045),
-            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(isActive ? mode.color.opacity(0.9) : Color.white.opacity(0.11), lineWidth: 1)
-        }
+        .buttonStyle(.plain)
+        .help(controlHelp(for: mode, isActive: isActive))
+        .accessibilityLabel(mode.title)
+        .accessibilityValue("Total today: \(totalLabel(totalSeconds))" + (isActive ? ", session: \(timerLabel(store.sessionSeconds))" : ""))
     }
 
     private func timerLabel(_ seconds: Int) -> String {
@@ -453,7 +444,7 @@ private struct FocusTimerPanel: View {
         let hours = seconds / 3600
         let minutes = (seconds % 3600) / 60
         let remainingSeconds = seconds % 60
-        return String(format: "%dh %02d mins %d sec", hours, minutes, remainingSeconds)
+        return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
     }
 
     private func controlHelp(for mode: FocusTimerMode, isActive: Bool) -> String {

@@ -34,7 +34,7 @@ struct CodexUsageBar: View {
                 thresholdDraft = dailyThreshold.formatted(.number.locale(Locale(identifier: "en_US_POSIX")).precision(.fractionLength(0...1)))
                 showsDetails.toggle()
             } label: {
-                HStack(spacing: 9) {
+                HStack(spacing: 6) {
                     Group {
                         if let icon = Self.codexIcon {
                             Image(nsImage: icon).resizable().scaledToFit()
@@ -43,17 +43,19 @@ struct CodexUsageBar: View {
                         }
                     }
                     .frame(width: 22, height: 22)
+                    .frame(width: 44, height: 54)
+                    .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
                     .accessibilityHidden(true)
 
                     VStack(spacing: 8) {
                         usageRow("Daily", fraction: today == nil ? nil : fraction, stale: stale)
                         usageRow("Weekly", fraction: weeklyFraction, stale: stale)
                     }
+                    .padding(.horizontal, 12)
+                    .frame(height: 54)
+                    .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
                 }
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Codex daily and weekly usage")
