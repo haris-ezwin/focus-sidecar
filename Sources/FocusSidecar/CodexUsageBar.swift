@@ -43,16 +43,16 @@ struct CodexUsageBar: View {
                         }
                     }
                     .frame(width: 22, height: 22)
-                    .frame(width: 44, height: 54)
+                    .frame(width: 44, height: 84)
                     .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
                     .accessibilityHidden(true)
 
                     VStack(spacing: 8) {
-                        usageRow("Daily", fraction: today == nil ? nil : fraction, stale: stale)
-                        usageRow("Weekly", fraction: weeklyFraction, stale: stale)
+                        countdownRow("Daily", fraction: today == nil ? nil : fraction, stale: stale, reset: nextMidnight(after: context.date), now: context.date)
+                        countdownRow("Weekly", fraction: weeklyFraction, stale: stale, reset: store.history.lastSample.map { Date(timeIntervalSince1970: $0.resetsAt) }, now: context.date)
                     }
                     .padding(.horizontal, 12)
-                    .frame(height: 54)
+                    .frame(height: 84)
                     .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
                 }
                 .foregroundStyle(.secondary)
@@ -141,9 +141,23 @@ struct CodexUsageBar: View {
                 .fixedSize()
                 .frame(width: 45, alignment: .leading)
             GeometryReader { geometry in
-                Capsule().fill(.white.opacity(0.08))
-                Capsule().fill(color)
-                    .frame(width: geometry.size.width * min(max(value, 0), 1))
+                if title == "Weekly" {
+                    let segmentWidth = max(0, (geometry.size.width - 18) / 7)
+                    HStack(spacing: 3) {
+                        ForEach(0..<7) { index in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(.white.opacity(0.12))
+                                Capsule().fill(color)
+                                    .frame(width: segmentWidth * min(max(value * 7 - Double(index), 0), 1))
+                            }
+                            .frame(width: segmentWidth)
+                        }
+                    }
+                } else {
+                    Capsule().fill(.white.opacity(0.08))
+                    Capsule().fill(color)
+                        .frame(width: geometry.size.width * min(max(value, 0), 1))
+                }
             }
             .frame(height: 5)
             Text(fraction == nil ? "—" : "\((value * 100).formatted(.number.precision(.fractionLength(0))))%")
@@ -153,6 +167,35 @@ struct CodexUsageBar: View {
                 .frame(minWidth: 32, alignment: .trailing)
         }
         .font(.system(size: 11, weight: .semibold, design: .rounded))
+    }
+
+    private func countdownRow(_ title: String, fraction: Double?, stale: Bool, reset: Date?, now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            usageRow(title, fraction: fraction, stale: stale)
+            Text(reset.map { resetCountdown(until: $0, now: now) } ?? "Reset unavailable")
+                .font(.system(size: 9, weight: .regular, design: .rounded))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+    }
+
+    private func nextMidnight(after date: Date) -> Date? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Kuala_Lumpur")!
+        return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date))
+    }
+
+    private func resetCountdown(until reset: Date, now: Date) -> String {
+        let remaining = reset.timeIntervalSince(now)
+        guard remaining > 0 else { return "Reset pending" }
+        let hours = Int(remaining / 3600)
+        let days = hours / 24
+        let dayText = "\(days) \(days == 1 ? "day" : "days")"
+        let hourCount = hours % 24
+        let hourText = "\(hourCount) \(hourCount == 1 ? "hour" : "hours")"
+        if days > 0 { return "in \(dayText) \(hourText)" }
+        if hours > 0 { return "in \(hourText)" }
+        return "in less than 1 hour"
     }
 
     private func saveThreshold() {
