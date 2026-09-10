@@ -28,7 +28,7 @@ struct CodexUsageBar: View {
             let stale = store.errorMessage != nil || store.history.lastSample.map {
                 context.date.timeIntervalSince($0.date) > 180
             } ?? true
-            let color: Color = stale ? .secondary : fraction >= 1 ? .red : fraction >= 0.8 ? .orange : .green
+            let weeklyFraction = store.history.lastSample.map { $0.usedPercent / 100 }
 
             Button {
                 thresholdDraft = dailyThreshold.formatted(.number.locale(Locale(identifier: "en_US_POSIX")).precision(.fractionLength(0...1)))
@@ -45,33 +45,26 @@ struct CodexUsageBar: View {
                     .frame(width: 22, height: 22)
                     .accessibilityHidden(true)
 
-                    GeometryReader { geometry in
-                        Capsule().fill(.white.opacity(0.08))
-                        Capsule().fill(color)
-                            .frame(width: geometry.size.width * min(max(fraction, 0), 1))
+                    VStack(spacing: 8) {
+                        usageRow("Daily", fraction: today == nil ? nil : fraction, stale: stale)
+                        usageRow("Weekly", fraction: weeklyFraction, stale: stale)
                     }
-                    .frame(height: 5)
-                    Text(today == nil ? "—" : "\((fraction * 100).formatted(.number.precision(.fractionLength(0))))%")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .fixedSize()
-                        .frame(minWidth: 32, alignment: .trailing)
                 }
-                .foregroundStyle(color)
+                .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.vertical, 10)
                 .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Codex daily usage")
-            .accessibilityValue(today == nil ? "Unavailable" : "\(Int(fraction * 100)) percent of daily target\(stale ? ", last known reading" : "")")
-            .help("100% = \(dailyThreshold.formatted(.number.precision(.fractionLength(0...1))))% of your weekly allowance. Click to set your daily threshold.\(stale ? " Waiting for a fresh reading." : "")")
+            .accessibilityLabel("Codex daily and weekly usage")
+            .accessibilityValue("Daily: \(today == nil ? "unavailable" : "\(Int(fraction * 100)) percent of target"). Weekly: \(weeklyFraction.map { "\(Int($0 * 100)) percent used" } ?? "unavailable").\(stale ? " Last known reading." : "")")
+            .help("Weekly shows allowance used. Daily 100% = \(dailyThreshold.formatted(.number.precision(.fractionLength(0...1))))% of your weekly allowance. Click to set your daily threshold.\(stale ? " Waiting for a fresh reading." : "")")
         }
         .padding(.horizontal, 14)
         .popover(isPresented: $showsDetails, arrowEdge: .top) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Codex daily allowance").font(.headline)
+                    Text("Codex usage").font(.headline)
                     Spacer()
                     Button { Task { await store.refresh() } } label: {
                         Image(systemName: "arrow.clockwise")
@@ -135,6 +128,29 @@ struct CodexUsageBar: View {
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
             Task { await store.refresh() }
         }
+    }
+
+    private func usageRow(_ title: String, fraction: Double?, stale: Bool) -> some View {
+        let value = fraction ?? 0
+        let color: Color = stale || fraction == nil ? .secondary : value >= 1 ? .red : value >= 0.8 ? .orange : .green
+        return HStack(spacing: 8) {
+            Text(title)
+                .foregroundStyle(.secondary)
+                .fixedSize()
+                .frame(width: 45, alignment: .leading)
+            GeometryReader { geometry in
+                Capsule().fill(.white.opacity(0.08))
+                Capsule().fill(color)
+                    .frame(width: geometry.size.width * min(max(value, 0), 1))
+            }
+            .frame(height: 5)
+            Text(fraction == nil ? "—" : "\((value * 100).formatted(.number.precision(.fractionLength(0))))%")
+                .foregroundStyle(color)
+                .monospacedDigit()
+                .fixedSize()
+                .frame(minWidth: 32, alignment: .trailing)
+        }
+        .font(.system(size: 11, weight: .semibold, design: .rounded))
     }
 
     private func saveThreshold() {
