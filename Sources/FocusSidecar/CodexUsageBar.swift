@@ -79,6 +79,13 @@ struct CodexUsageBar: View {
                     .disabled(store.isRefreshing)
                     .help("Refresh usage")
                 }
+                if let day = store.history.today(), let startedAt = day.startedAt {
+                    Text("Used since \(startedAt.formatted(.dateTime.hour().minute().timeZone(.specificName(.short)))): \(day.usedPercent.formatted(.number.precision(.fractionLength(0...1))))% of weekly allowance")
+                    if let baseline = day.baselineUsedPercent {
+                        Text("Starting weekly usage: \(baseline.formatted())%")
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Text("Daily threshold")
                     .font(.caption.weight(.semibold))
                 HStack {
@@ -112,7 +119,7 @@ struct CodexUsageBar: View {
                             .monospacedDigit()
                     }
                 }
-                Text("Approximate readings, refreshed every minute while Sidecar is running. Days start at midnight Malaysia time. * Partial day: only observed usage is counted; gaps across midnight or resets may miss usage.")
+                Text("Approximate readings, refreshed every minute while Sidecar is running. A new baseline starts at the first reading after midnight Malaysia time. * Partial day: only increases observed since the baseline are counted. Reset changes start a new baseline; usage across those changes may be missed.")
                     .font(.caption2).foregroundStyle(.secondary)
             }
             .font(.caption)
