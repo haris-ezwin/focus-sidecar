@@ -140,6 +140,38 @@ final class TaskStore: ObservableObject {
         }
     }
 
+    func availableTasks() async throws -> [FocusTask] {
+        try await service.availableTasks()
+    }
+
+    func saveTask(existing: FocusTask?, title: String, dueDate: String?, startTime: String?, endTime: String?) async throws {
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { throw FocusSidecarError.server("Enter a task title.") }
+        if let existing {
+            guard !updatingTaskIDs.contains(existing.id), !deletingTaskIDs.contains(existing.id) else {
+                throw FocusSidecarError.server("This task is being updated. Try again shortly.")
+            }
+            updatingTaskIDs.insert(existing.id)
+        }
+        defer { if let existing { updatingTaskIDs.remove(existing.id) } }
+        let saved = try await service.saveTask(id: existing?.id, title: title, dueDate: dueDate, startTime: startTime, endTime: endTime)
+        reconcile(saved)
+    }
+
+    func addToToday(_ task: FocusTask) async throws {
+        let saved = try await service.addToToday(task)
+        reconcile(saved)
+    }
+
+    private func reconcile(_ task: FocusTask) {
+        let today = SupabaseService.dateString(for: Date(), calendar: .current)
+        if task.dueDate == today && !task.isDone {
+            if let index = tasks.firstIndex(where: { $0.id == task.id }) { tasks[index] = task }
+            else { tasks.append(task) }
+        } else { tasks.removeAll { $0.id == task.id } }
+        saveTaskOrder(for: Date())
+    }
+
     func saveEvent(existing: CountdownEvent?, name: String, eventAt: Date) -> String? {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return "Enter an event name." }

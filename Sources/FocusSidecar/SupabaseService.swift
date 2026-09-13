@@ -118,6 +118,63 @@ actor SupabaseService {
         }
     }
 
+    func availableTasks() async throws -> [FocusTask] {
+        let today = Self.dateString(for: Date(), calendar: .current)
+        var result: [FocusTask] = []
+        while true {
+            let page: [FocusTask] = try await taskRequest(method: "GET", query: [
+                URLQueryItem(name: "or", value: "(due_date.neq.\(today),due_date.is.null)"),
+                URLQueryItem(name: "status", value: "neq.Done"),
+                URLQueryItem(name: "order", value: "due_date.asc.nullslast,id.asc"),
+                URLQueryItem(name: "limit", value: "500"),
+                URLQueryItem(name: "offset", value: String(result.count))
+            ])
+            result.append(contentsOf: page)
+            if page.count < 500 { return result }
+        }
+    }
+
+    func saveTask(id: UUID?, title: String, dueDate: String?, startTime: String?, endTime: String?) async throws -> FocusTask {
+        var values: [String: Any] = [
+            "title": title,
+            "due_date": dueDate as Any? ?? NSNull(),
+            "start_time": startTime as Any? ?? NSNull(),
+            "end_time": endTime as Any? ?? NSNull()
+        ]
+        if id == nil { values["type"] = "Task"; values["status"] = "Todo" }
+        return try await mutateTask(id: id, values: values)
+    }
+
+    func addToToday(_ task: FocusTask) async throws -> FocusTask {
+        try await mutateTask(id: task.id, values: ["due_date": Self.dateString(for: Date(), calendar: .current)])
+    }
+
+    private func mutateTask(id: UUID?, values: [String: Any]) async throws -> FocusTask {
+        let query = id.map { [URLQueryItem(name: "id", value: "eq.\($0.uuidString)")] } ?? []
+        let rows = try await taskRequest(method: id == nil ? "POST" : "PATCH", query: query, values: values)
+        guard rows.count == 1, id == nil || rows[0].id == id else {
+            throw FocusSidecarError.server("The task was not saved. Refresh and try again.")
+        }
+        return rows[0]
+    }
+
+    private func taskRequest(method: String, query: [URLQueryItem], values: [String: Any]? = nil) async throws -> [FocusTask] {
+        let token = try await validAccessToken()
+        var components = URLComponents(url: configuration.projectURL.appendingPathComponent("rest/v1/\(configuration.table)"), resolvingAgainstBaseURL: false)!
+        components.queryItems = query + [
+            URLQueryItem(name: "select", value: "id,title,priority,status,due_date,start_time,end_time")
+        ]
+        if method != "POST" { components.queryItems?.append(URLQueryItem(name: "type", value: "eq.Task")) }
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = method
+        request.setValue(configuration.publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        if let values { request.httpBody = try JSONSerialization.data(withJSONObject: values) }
+        return try await perform(request)
+    }
+
     private func validAccessToken() async throws -> String {
         guard var session else { throw FocusSidecarError.authenticationRequired }
         if session.needsRefresh {

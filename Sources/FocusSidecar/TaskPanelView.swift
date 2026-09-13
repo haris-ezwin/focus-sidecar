@@ -7,6 +7,9 @@ struct TaskPanelView: View {
     @ObservedObject var follower: WindowFollower
     @ObservedObject var timerStore: FocusTimerStore
     @StateObject private var codexUsageStore = CodexUsageStore()
+    @State private var taskEditor: TaskEditorContext?
+    @State private var showExistingTasks = false
+    @State private var taskToDelete: FocusTask?
     @State private var eventEditor: EventEditorContext?
     @State private var eventToDelete: CountdownEvent?
     @State private var dividerDragStartHeight: CGFloat?
@@ -46,6 +49,22 @@ struct TaskPanelView: View {
         }
         .frame(minWidth: 284, minHeight: 620)
         .preferredColorScheme(.dark)
+        .sheet(item: $taskEditor) { context in
+            TaskEditorSheet(store: store, task: context.task)
+        }
+        .sheet(isPresented: $showExistingTasks) { ExistingTaskSheet(store: store) }
+        .alert("Delete task?", isPresented: Binding(
+            get: { taskToDelete != nil },
+            set: { if !$0 { taskToDelete = nil } }
+        )) {
+            Button("Cancel", role: .cancel) { taskToDelete = nil }
+            Button("Delete", role: .destructive) {
+                if let task = taskToDelete { Task { await store.delete(task) } }
+                taskToDelete = nil
+            }
+        } message: {
+            Text("Permanently delete \(taskToDelete?.title ?? "this task")? This also deletes it from your synced task list.")
+        }
         .sheet(item: $eventEditor) { context in
             EventEditorSheet(event: context.event) { name, date in
                 store.saveEvent(existing: context.event, name: name, eventAt: date)
@@ -105,6 +124,11 @@ struct TaskPanelView: View {
                                 isUpdating: store.updatingTaskIDs.contains(task.id),
                                 onToggle: { Task { await store.toggle(task) } }
                             )
+                            .contextMenu {
+                                Button("Edit", systemImage: "pencil") { taskEditor = TaskEditorContext(task: task) }
+                                Button("Delete", systemImage: "trash", role: .destructive) { taskToDelete = task }
+                            }
+                            .disabled(store.deletingTaskIDs.contains(task.id) || store.updatingTaskIDs.contains(task.id))
                             .opacity(draggingTaskID == task.id ? 0 : (index == 0 ? 1 : 0.05))
                             .onDrag {
                                 draggingTaskID = task.id
@@ -269,6 +293,18 @@ struct TaskPanelView: View {
             }
 
             Spacer()
+
+            Menu {
+                Button("New task…", systemImage: "plus") { taskEditor = TaskEditorContext(task: nil) }
+                Button("Add existing task to Today…", systemImage: "calendar.badge.plus") { showExistingTasks = true }
+            } label: {
+                Image(systemName: "plus")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Add task")
+            .accessibilityLabel("Add task")
 
             Button {
                 follower.togglePinned()
