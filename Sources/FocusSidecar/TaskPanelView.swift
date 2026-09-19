@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -116,51 +117,90 @@ struct TaskPanelView: View {
                 }
                 Spacer()
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 3) {
-                        ForEach(Array(store.tasks.enumerated()), id: \.element.id) { index, task in
-                            TaskRow(
-                                task: task,
-                                isUpdating: store.updatingTaskIDs.contains(task.id),
-                                onToggle: { Task { await store.toggle(task) } }
-                            )
-                            .contextMenu {
-                                Button("Edit", systemImage: "pencil") { taskEditor = TaskEditorContext(task: task) }
-                                Button("Delete", systemImage: "trash", role: .destructive) { taskToDelete = task }
-                            }
-                            .disabled(store.deletingTaskIDs.contains(task.id) || store.updatingTaskIDs.contains(task.id))
-                            .opacity(draggingTaskID == task.id ? 0 : (index == 0 ? 1 : 0.05))
-                            .onDrag {
-                                draggingTaskID = task.id
-                                return NSItemProvider(object: task.id.uuidString as NSString)
-                            } preview: {
-                                TaskRow(
-                                    task: task,
-                                    isUpdating: false,
-                                    onToggle: {}
-                                )
-                                .frame(width: 278)
-                                .scaleEffect(1.045)
-                                .shadow(color: .black.opacity(0.34), radius: 9, y: 4)
-                            }
-                            .onDrop(
-                                of: [UTType.text],
-                                delegate: TaskReorderDropDelegate(
-                                    destinationTaskID: task.id,
-                                    draggingTaskID: $draggingTaskID,
-                                    onMove: store.moveTask
-                                )
-                            )
-                        }
-                    }
-                    .animation(
-                        draggingTaskID == nil ? .snappy(duration: 0.34) : nil,
-                        value: store.tasks
-                    )
+                if #available(macOS 27.0, *) {
+                    nativeTaskList
+                } else {
+                    legacyTaskList
                 }
-                .scrollIndicators(.never)
             }
         }
+    }
+
+    @available(macOS 27.0, *)
+    private var nativeTaskList: some View {
+        ScrollView {
+            LazyVStack(spacing: 3) {
+                ForEach(store.tasks) { task in
+                    TaskRow(
+                        task: task,
+                        isUpdating: store.updatingTaskIDs.contains(task.id),
+                        onToggle: { Task { await store.toggle(task) } }
+                    )
+                    .contextMenu {
+                        Button("Edit", systemImage: "pencil") { taskEditor = TaskEditorContext(task: task) }
+                        Button("Delete", systemImage: "trash", role: .destructive) { taskToDelete = task }
+                    }
+                    .disabled(store.deletingTaskIDs.contains(task.id) || store.updatingTaskIDs.contains(task.id))
+                    .opacity(store.tasks.first?.id == task.id ? 1 : 0.05)
+                }
+                .reorderable()
+            }
+            .reorderContainer(for: FocusTask.self) { difference in
+                switch difference.destination.position {
+                case .before(let destinationID):
+                    store.moveTasks(difference.sources, before: destinationID)
+                case .end:
+                    store.moveTasks(difference.sources, before: nil)
+                }
+            }
+        }
+        .scrollIndicators(.never)
+    }
+
+    private var legacyTaskList: some View {
+        ScrollView {
+            LazyVStack(spacing: 3) {
+                ForEach(Array(store.tasks.enumerated()), id: \.element.id) { index, task in
+                    TaskRow(
+                        task: task,
+                        isUpdating: store.updatingTaskIDs.contains(task.id),
+                        onToggle: { Task { await store.toggle(task) } }
+                    )
+                    .contextMenu {
+                        Button("Edit", systemImage: "pencil") { taskEditor = TaskEditorContext(task: task) }
+                        Button("Delete", systemImage: "trash", role: .destructive) { taskToDelete = task }
+                    }
+                    .disabled(store.deletingTaskIDs.contains(task.id) || store.updatingTaskIDs.contains(task.id))
+                    .opacity(draggingTaskID == task.id ? 0 : (index == 0 ? 1 : 0.05))
+                    .onDrag {
+                        draggingTaskID = task.id
+                        return NSItemProvider(object: task.id.uuidString as NSString)
+                    } preview: {
+                        TaskRow(
+                            task: task,
+                            isUpdating: false,
+                            onToggle: {}
+                        )
+                        .frame(width: 278)
+                        .scaleEffect(1.045)
+                        .shadow(color: .black.opacity(0.34), radius: 9, y: 4)
+                    }
+                    .onDrop(
+                        of: [UTType.text],
+                        delegate: TaskReorderDropDelegate(
+                            destinationTaskID: task.id,
+                            draggingTaskID: $draggingTaskID,
+                            onMove: store.moveTask
+                        )
+                    )
+                }
+            }
+            .animation(
+                draggingTaskID == nil ? .snappy(duration: 0.34) : nil,
+                value: store.tasks
+            )
+        }
+        .scrollIndicators(.never)
     }
 
     private func eventsSection(maxListHeight: CGFloat) -> some View {

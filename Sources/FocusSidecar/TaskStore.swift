@@ -103,6 +103,25 @@ final class TaskStore: ObservableObject {
         saveTaskOrder(for: Date())
     }
 
+    /// Resolve IDs against the current list so a refresh during a drag cannot restore stale tasks.
+    func moveTasks(_ sourceIDs: [UUID], before destinationID: UUID?) {
+        let sources = Set(sourceIDs)
+        let movedTasks = tasks.filter { sources.contains($0.id) }
+        guard !movedTasks.isEmpty else { return }
+        var reorderedTasks = tasks.filter { !sources.contains($0.id) }
+        let insertionIndex: Int
+        if let destinationID {
+            guard let index = reorderedTasks.firstIndex(where: { $0.id == destinationID }) else { return }
+            insertionIndex = index
+        } else {
+            insertionIndex = reorderedTasks.endIndex
+        }
+        reorderedTasks.insert(contentsOf: movedTasks, at: insertionIndex)
+        guard reorderedTasks != tasks else { return }
+        tasks = reorderedTasks
+        saveTaskOrder(for: Date())
+    }
+
     func toggle(_ task: FocusTask) async {
         guard !updatingTaskIDs.contains(task.id), !deletingTaskIDs.contains(task.id) else { return }
         updatingTaskIDs.insert(task.id)
