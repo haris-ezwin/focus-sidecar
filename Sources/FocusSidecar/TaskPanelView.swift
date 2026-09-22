@@ -134,14 +134,20 @@ struct TaskPanelView: View {
                     TaskRow(
                         task: task,
                         isUpdating: store.updatingTaskIDs.contains(task.id),
+                        visualOpacity: store.tasks.first?.id == task.id ? 1 : 0.05,
                         onToggle: { Task { await store.toggle(task) } }
                     )
+                    .contentShape(Rectangle())
+                    .allowsHitTesting(true)
                     .contextMenu {
+                        Button("Done", systemImage: "checkmark") {
+                            Task { await store.toggle(task) }
+                        }
+                        Divider()
                         Button("Edit", systemImage: "pencil") { taskEditor = TaskEditorContext(task: task) }
                         Button("Delete", systemImage: "trash", role: .destructive) { taskToDelete = task }
                     }
                     .disabled(store.deletingTaskIDs.contains(task.id) || store.updatingTaskIDs.contains(task.id))
-                    .opacity(store.tasks.first?.id == task.id ? 1 : 0.05)
                 }
                 .reorderable()
             }
@@ -164,14 +170,21 @@ struct TaskPanelView: View {
                     TaskRow(
                         task: task,
                         isUpdating: store.updatingTaskIDs.contains(task.id),
+                        visualOpacity: index == 0 ? 1 : 0.05,
                         onToggle: { Task { await store.toggle(task) } }
                     )
+                    .opacity(draggingTaskID == task.id ? 0 : 1)
+                    .contentShape(Rectangle())
+                    .allowsHitTesting(true)
                     .contextMenu {
+                        Button("Done", systemImage: "checkmark") {
+                            Task { await store.toggle(task) }
+                        }
+                        Divider()
                         Button("Edit", systemImage: "pencil") { taskEditor = TaskEditorContext(task: task) }
                         Button("Delete", systemImage: "trash", role: .destructive) { taskToDelete = task }
                     }
                     .disabled(store.deletingTaskIDs.contains(task.id) || store.updatingTaskIDs.contains(task.id))
-                    .opacity(draggingTaskID == task.id ? 0 : (index == 0 ? 1 : 0.05))
                     .onDrag {
                         draggingTaskID = task.id
                         return NSItemProvider(object: task.id.uuidString as NSString)
@@ -654,6 +667,7 @@ private struct EventEditorSheet: View {
 private struct TaskRow: View {
     let task: FocusTask
     let isUpdating: Bool
+    var visualOpacity: Double = 1
     let onToggle: () -> Void
 
     var body: some View {
@@ -664,9 +678,12 @@ private struct TaskRow: View {
                     .symbolEffect(.bounce, value: task.isDone)
                     .frame(width: 16, height: 16)
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(task.isDone ? .green : .secondary)
+                    .foregroundStyle((task.isDone ? Color.green : Color.secondary).opacity(visualOpacity))
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .allowsHitTesting(true)
+            .accessibilityLabel("Mark \(task.title) as \(task.isDone ? "not done" : "done")")
             .disabled(isUpdating)
             .help(task.isDone ? "Mark as not done" : "Mark as done")
 
@@ -690,11 +707,12 @@ private struct TaskRow: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             }
+            .opacity(visualOpacity)
         }
         .padding(.vertical, 7)
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .background(.white.opacity(0.045 * visualOpacity), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .contentShape(Rectangle())
         .transition(.asymmetric(
             insertion: .opacity.combined(with: .move(edge: .bottom)),

@@ -20,7 +20,8 @@ A tiny native macOS companion that follows the focused window, shows tasks due t
 - Shows task title, time, and priority.
 - Lets you click and hold a task card to drag it up or down; the local order survives refreshes for that day.
 - Keeps the first task fully visible and mutes the remaining tasks to 5% opacity to reduce distraction.
-- Clicking a task's completion circle updates its Supabase status to `Done`, briefly celebrates the check, then removes the row so the next task slides up.
+- Every task, including dimmed tasks, has a right-click menu with Done, Edit, and Delete.
+- Clicking Done or a task's completion circle updates its Supabase status to `Done`, briefly celebrates the check, then removes the row so the next task slides up.
 - Refreshes every minute and stores the Supabase session in macOS Keychain.
 
 The app reads its Supabase URL and publishable client key from local environment configuration. It refuses `sb_secret_…` keys and never stores the user's password.
