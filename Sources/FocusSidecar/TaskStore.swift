@@ -245,7 +245,8 @@ final class TaskStore: ObservableObject {
             status: status,
             dueDate: task.dueDate,
             startTime: task.startTime,
-            endTime: task.endTime
+            endTime: task.endTime,
+            links: task.links
         )
     }
 

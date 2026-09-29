@@ -54,7 +54,7 @@ actor SupabaseService {
             resolvingAgainstBaseURL: false
         )!
         components.queryItems = [
-            URLQueryItem(name: "select", value: "id,title,priority,status,due_date,start_time,end_time"),
+            URLQueryItem(name: "select", value: "id,title,priority,status,due_date,start_time,end_time,links"),
             URLQueryItem(name: "due_date", value: "eq.\(dateString)"),
             URLQueryItem(name: "type", value: "eq.Task"),
             URLQueryItem(name: "order", value: "start_time.asc.nullslast,created_at.asc")
@@ -162,7 +162,7 @@ actor SupabaseService {
         let token = try await validAccessToken()
         var components = URLComponents(url: configuration.projectURL.appendingPathComponent("rest/v1/\(configuration.table)"), resolvingAgainstBaseURL: false)!
         components.queryItems = query + [
-            URLQueryItem(name: "select", value: "id,title,priority,status,due_date,start_time,end_time")
+            URLQueryItem(name: "select", value: "id,title,priority,status,due_date,start_time,end_time,links")
         ]
         if method != "POST" { components.queryItems?.append(URLQueryItem(name: "type", value: "eq.Task")) }
         var request = URLRequest(url: components.url!)

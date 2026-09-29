@@ -30,6 +30,19 @@ struct CountdownEvent: Identifiable, Equatable, Sendable {
     }
 }
 
+struct TaskLink: Codable, Equatable, Sendable {
+    let name: String
+    let url: String
+
+    var destination: URL? {
+        guard let destination = URL(string: url),
+              let scheme = destination.scheme?.lowercased(),
+              ["https", "http"].contains(scheme),
+              destination.host != nil else { return nil }
+        return destination
+    }
+}
+
 struct FocusTask: Codable, Identifiable, Equatable, Sendable {
     let id: UUID
     let title: String
@@ -38,9 +51,10 @@ struct FocusTask: Codable, Identifiable, Equatable, Sendable {
     let dueDate: String?
     let startTime: String?
     let endTime: String?
+    let links: [TaskLink]
 
     enum CodingKeys: String, CodingKey {
-        case id, title, priority, status
+        case id, title, priority, status, links
         case dueDate = "due_date"
         case startTime = "start_time"
         case endTime = "end_time"

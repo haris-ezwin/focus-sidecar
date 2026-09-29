@@ -694,6 +694,7 @@ private struct TaskRow: View {
                     .strikethrough(task.isDone)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(visualOpacity)
 
                 HStack(spacing: 6) {
                     if let time = task.timeLabel {
@@ -706,8 +707,36 @@ private struct TaskRow: View {
                 }
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .opacity(visualOpacity)
+
+                if !task.links.isEmpty {
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 5) {
+                            ForEach(Array(task.links.enumerated()), id: \.offset) { _, link in
+                                if let destination = link.destination {
+                                    Link(destination: destination) {
+                                        HStack(spacing: 3) {
+                                            Text(link.name)
+                                                .lineLimit(1)
+                                            Image(systemName: "arrow.up.right")
+                                                .font(.system(size: 8, weight: .semibold))
+                                        }
+                                        .font(.system(size: 10, weight: .medium))
+                                        .padding(.horizontal, 7)
+                                        .padding(.vertical, 4)
+                                        .background(.white.opacity(0.1), in: Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help(destination.absoluteString)
+                                    .accessibilityLabel("Open \(link.name)")
+                                }
+                            }
+                        }
+                    }
+                    .scrollIndicators(.never)
+                    .opacity(max(visualOpacity, 0.65))
+                }
             }
-            .opacity(visualOpacity)
         }
         .padding(.vertical, 7)
         .padding(.horizontal, 8)
